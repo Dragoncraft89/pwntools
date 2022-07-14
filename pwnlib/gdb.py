@@ -363,7 +363,7 @@ def _get_runner(ssh=None):
     else:                          return tubes.process.process
 
 @LocalContext
-def debug(args, gdbscript=None, exe=None, ssh=None, env=None, sysroot=None, api=False, **kwargs):
+def debug(args, gdbscript=None, exe=None, ssh=None, env=None, sysroot=None, api=False, gdb_remote_cmd="target remote", **kwargs):
     r"""
     Launch a GDB server with the specified command line,
     and launches GDB to attach to it.
@@ -377,6 +377,9 @@ def debug(args, gdbscript=None, exe=None, ssh=None, env=None, sysroot=None, api=
         sysroot(str): Foreign-architecture sysroot, used for QEMU-emulated binaries
             and Android targets.
         api(bool): Enable access to GDB Python API.
+        gdb_remote_cmd(str): The gdb command to connect to the remote gdbserver.
+            Invoked as `gdb_remote_cmd HOST:PORT`.
+            Defaults to `target remote`.
 
     Returns:
         :class:`.process` or :class:`.ssh_channel`: A tube connected to the target process.
@@ -577,7 +580,7 @@ def debug(args, gdbscript=None, exe=None, ssh=None, env=None, sysroot=None, api=
     if not ssh and context.os == 'android':
         host = context.adb_host
 
-    tmp = attach((host, port), exe=exe, gdbscript=gdbscript, ssh=ssh, sysroot=sysroot, api=api)
+    tmp = attach((host, port), exe=exe, gdbscript=gdbscript, ssh=ssh, sysroot=sysroot, api=api, gdb_remote_cmd=gdb_remote_cmd)
     if api:
         _, gdb = tmp
         gdbserver.gdb = gdb
@@ -717,7 +720,7 @@ class Gdb:
         self.conn.root.quit()
 
 @LocalContext
-def attach(target, gdbscript = '', exe = None, gdb_args = None, ssh = None, sysroot = None, api = False):
+def attach(target, gdbscript = '', exe = None, gdb_args = None, ssh = None, sysroot = None, api = False, gdb_remote_cmd = "target remote"):
     r"""
     Start GDB in a new terminal and attach to `target`.
 
@@ -731,6 +734,10 @@ def attach(target, gdbscript = '', exe = None, gdb_args = None, ssh = None, sysr
         sysroot(str): Foreign-architecture sysroot, used for QEMU-emulated binaries
             and Android targets.
         api(bool): Enable access to GDB Python API.
+        gdb_remote_cmd(str): The gdb command to connect to the remote gdbserver.
+            Invoked as `gdb_remote_cmd HOST:PORT`.
+            Defaults to `target remote`. Used only when target is a tuple.
+            See below for more information.
 
     Returns:
         PID of the GDB process (or the window which it is running in).
@@ -948,7 +955,7 @@ def attach(target, gdbscript = '', exe = None, gdb_args = None, ssh = None, sysr
         host, port = target
 
         if context.os != 'android':
-            pre += 'target remote %s:%d\n' % (host, port)
+            pre += '%s %s:%d\n' % (gdb_remote_cmd, host, port)
         else:
             # Android debugging is done over gdbserver, which can't follow
             # new inferiors (tldr; follow-fork-mode child) unless it is run
